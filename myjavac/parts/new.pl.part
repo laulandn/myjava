@@ -1,0 +1,77 @@
+
+##########################################################
+##########################################################
+##
+## File "new.pl.part"
+##
+##########################################################
+##########################################################
+
+sub newClassSymbol
+{
+  my $doIt=1;
+  # NOTE: In some cases may want to skip this...
+  if($symName eq $symParent) { $doIt=0; }
+  if($doIt eq 1) {
+    $symWhat="CLASS";
+    outputNewSymbol();
+  }
+  # NOTE: In some cases may want to do this...
+  #$symParent=$symName;
+}
+
+
+sub newMethodSymbol
+{
+  $symWhat="METHOD0";
+  if($isVirtual eq "true") { $symWhat="METHOD0V"; }
+  if($symName =~ /^\*/) {
+    # If a pointer, move * to type from name
+    $symName =~ s/^\*//;
+    $symType="$symType *";
+    $symWhat="METHODR";
+    if($isVirtual eq "true") { $symWhat="METHODRV"; }
+  }
+  if($symArgs) {
+    $symWhat="METHODA";
+    if($isVirtual eq "true") { $symWhat="METHODAV"; }
+  }
+  if($symArgs =~ /\) \{/) {
+    # Kludge!
+    $symArgs=""
+  }
+  outputNewSymbol();
+  $symParent=$symName;
+  $symName=$symArgs;
+  $symWhat="ARGUMENT";
+  $symArgs="";
+  outputNewSymbol();
+}
+
+
+sub newVarSymbol
+{
+  if($symName =~ /^\*/) {
+    # If a pointer, move * to type from name
+    $symName =~ s/^\*//;
+    $symType="$symType *";
+  }
+  $symWhat="VAR";
+  if($symType =~ /\*/) {
+    $symWhat="POINTER";
+  }
+  if($symName =~ /(.*)\=(.*)/) {
+    # actually a constant
+    $symName=$1;
+    $symArgs=$2;
+    $symWhat="CONST";
+  }
+  if($symName =~ /(.*)\[.*\]/) {
+    # actually an array
+    $symName=$1;
+    #$symArgs=$2;
+    $symWhat="ARRAY";
+  }
+  outputNewSymbol();
+}
+

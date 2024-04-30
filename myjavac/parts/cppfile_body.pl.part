@@ -1,0 +1,289 @@
+#! /usr/bin/perl
+
+
+##########################################################
+##########################################################
+
+my $symWhat="";
+my $symName="";
+my $symType="";
+my $symArgs="";
+my $symParent="";
+#
+my $symProtection="";
+
+
+##########################################################
+##########################################################
+
+
+my $didSomething=0;
+my $skippedSomething=0;
+
+# both not used yet
+my $inBody=0;
+my $isHeader=0;
+
+
+while(<>) {
+  $symName=""; $symType=""; $symArgs="";
+  #$symParent=""; $symProtection="";
+  $didSomething=0;
+  $skippedSomething=0;
+  $isVirtual=0;
+  # this might be useful...
+  $len=length $_;
+  #
+  if(/^\#include \"(\S*)\/(\S*).h\"/) {
+    $symParent=$1;
+    $symName=$2;
+    if($symParent =~ /\.\.\/(\S+)/) {
+      # remove ../ if present
+      $symParent=$1;
+    }
+    if($symName eq "njavacpp") {
+      # skipping...
+      $symName="";
+    }
+    else {
+      $symType="EXTERNAL";
+      newClassSymbol();
+      $symParent=$symName;
+    }
+    $didSomething=1;
+  }
+  if(/^\#define (\w+)\((\w+)\) (\S+)/) {
+    $symParent="DEFINE";
+    $symName=$1;
+    $symArgs=$2;
+    $symType="";
+    #print "###define name=\"$symName\" args=\"$symArgs\" body=\"$3\" is...\n";
+    newMethodSymbol();
+    $didSomething=1;
+  }
+  if(/^\#define (\w+) (\S+)/) {
+    $symParent="DEFINE";
+    $symName=$1;
+    $symArgs=$2;
+    $symType="";
+    #print "###define name=\"$symName\" args=\"$symArgs\" is...\n";
+    newVarSymbol();
+    $didSomething=1;
+  }
+  if(/^\#if/) {
+    # skip...
+    $skippedSomething=1;
+  }
+  if(/^\#else/) {
+    # skip...
+    $skippedSomething=1;
+  }
+  if(/^\#/) {
+    # skip...
+    $skippedSomething=1;
+  }
+  #
+  if($didSomething eq 0) {
+    if(/class (\S+) \: (\S+) (\S+)/) {
+      $symParent=$3;
+      $symProtection=$2;
+      $symName=$1;
+      $symType="";
+      newClassSymbol();
+      $symParent=$symName;
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/class (\S+)/) {
+      $symParent="";
+      $symName=$1;
+      $symType="LOCAL";
+      newClassSymbol();
+      $symParent=$symName;
+      $didSomething=1;
+    }
+  }
+  #
+  if($didSomething eq 0) {
+    if(/(public)\:/) {
+      $symProtection=$1;
+      #print "# public...\n";
+      # ignoring for now...
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(private)\:/) {
+      $symProtection=$1;
+      #print "# private...\n";
+      # ignoring for now...
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(protected)\:/) {
+      $symProtection=$1;
+      #print "# protected...\n";
+      # ignoring for now...
+      $didSomething=1;
+    }
+  }
+  #
+  if($didSomething eq 0) {
+   if(/virtual (\S+)\((.*)\)\;/) {
+      $symType="";
+      $symName=$1;
+      $symArgs=$2;
+      #print "###cons/des name=\"$symName\" args=\"$symArgs\" is...\n";
+      $isVirtual=1;
+      newMethodSymbol();
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/virtual (\S*)( *)(\S+)\((.*)\)( *\{*.*\}*)$/) {
+      $symType=$1;
+      $symName=$3;
+      $symArgs=$4;
+      #print "###virtmethod type=\"$symType\" spaces=\"$2\" name=\"$symName\" args=\"$symArgs\" body=\"$5\" is...\n";
+      if($symName =~ /^\*/) {
+        # If a pointer, move * to type from name
+        $symName =~ s/^\*//;
+        $symType="$symType *";
+      }
+      $isVirtual="true";
+      newMethodSymbol();
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(\S+) (\S+)\((.*)\)( *\{*.*\}*)$/) {
+      $symType=$1;
+      $symName=$2;
+      $symArgs=$3;
+      if($1 eq "  ") {
+       $theClass="";
+      }
+      if($symType eq "virtual") {
+        # probably a constructor or destructor
+        $symType="";
+        $isVirtual=1;
+      }
+      #if($isVirtual eq 1) { print "###virtmethod unk=\"$1\" type=\"$symType\" name=\"$symName\" args=\"$symArgs\" is...\n"; } 
+      #else { print "###method unk=\"$1\" type=\"$symType\" name=\"$symName\" args=\"$symArgs\" is...\n"; }
+      newMethodSymbol();
+      $didSomething=1;
+    }
+   }
+  if($didSomething eq 0) {
+   if(/(\S+)\((.*)\)\;/) {
+      # probably a constructor or destructor?
+      $symType="";
+      $symName=$1;
+      $symArgs=$2;
+      #print "###cons/des name=\"$symName\" args=\"$symArgs\" is...\n";
+      newMethodSymbol();
+      $didSomething=1;
+    }
+  }
+  #
+  if($didSomething eq 0) {
+    # because methods can be mistaken for primatives
+    if(/(\S+) (\S+)\;/) {
+      $symName=$2;
+      $symType=$1;
+      newVarSymbol();
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(\S+) (\S+) (\S+)\;/) {
+      $symName=$3;
+      $symType="$1 $2";
+      newVarSymbol();
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/const (\S+)(.*) (\S+)\;/) {
+      $symName=$3;
+      $symType="$1$2";
+      newVarSymbol();
+      $didSomething=1;
+    }
+  }
+  #
+  if($didSomething eq 0) {
+    if(/^extern/) {
+      # skip...extern
+      $skippedSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^\s*\/\//) {
+      # skip...comment
+      $skippedSomething=1;
+    }
+  }
+  #
+  if($didSomething eq 0) {
+    if(/\}\;/) {
+      # skip...close curly semicolon
+      $skippedSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^\{/) {
+      # skip...open curly
+      $skippedSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^\}/) {
+      ## skip...close curly
+      $skippedSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^\;/) {
+      # skip...semicolon
+      $skippedSomething=1;
+    }
+  }
+  #
+  if($didSomething eq 0) {
+    if(/^$/) {
+      # skip...empty
+      $skippedSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^\n/) {
+      # skip...newline
+      $skippedSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/( +)\n/) {
+      # skip...a bunch of spaces and a newline...
+      $skippedSomething=1;
+    }
+  }
+  #
+  if($didSomething eq 1) { 
+    # line was processed
+  }
+  else {
+    if($skippedSomething eq 0) {
+      chomp $_;
+      print "# missed line: \"$_\"...\n";
+    }
+    else {
+      #chomp $_;
+      #print "# skipped line: \"$_\"...\n";
+    }
+  }
+}
+
+

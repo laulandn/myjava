@@ -1,0 +1,87 @@
+
+##########################################################
+##########################################################
+##
+## File "add.pl.part"
+##
+##########################################################
+##########################################################
+
+sub addClassExternal
+{
+  $symWhat="CLASS";  $symName=$className;  $symType="EXTERNAL";  $symArgs="";  $symParent=$parentName;
+  validateName($symName,"addClassExternal symName");
+  #NOTE Perfectly legal to have a null parent class here...
+  #validateName($parentName,"addClassExternal parentName");
+  huntForSymbol("CLASS",$symName);
+  if($theResult eq "") {
+    push(@theClasses,$className);
+    outputNewSymbol();
+  }
+}
+
+
+sub addClass
+{
+  $symWhat="CLASS";  $symName=$className;  $symType="LOCAL";  $symArgs="";  $symParent=$parentName;
+  validateName($symName,"addClass symName");
+  #NOTE Perfectly legal to have a null parent class here...
+  #validateName($parentName,"addClass parentName");
+  huntForSymbol("CLASS",$symName);
+  if($theResult eq "") {
+    push(@theClasses,$className);
+    outputNewSymbol();
+  }
+}
+
+
+sub addPointer
+{
+  $symWhat="POINTER";  $symName=$pointerName;  $symType="";  $symArgs=$methodName;  $symParent=$className;
+  validateName($className,"addPointer className");
+  validateName($methodName,"addPointer methodName");
+  validateName($symName,"addPointer symName");
+  huntForSymbol("POINTER",$symName);
+  if($theResult eq "") {
+    push(@thePointers,$pointerName);
+    outputNewSymbol();
+  }
+}
+
+
+# TODO: Not all methods should be METHODA!
+sub addMethod
+{
+  $symWhat="METHODA";  $symName=$methodName;  $symType=$returnType;  $symArgs=$theParams;  $symParent=$className;
+  validateName($className,"addMethod className");
+  validateName($symName,"addMethod symName");
+  validateName($returnType,"addMethod returnType");
+  validateName($theParams,"addMethod theParams");
+  huntForSymbol("METHODA",$symName);
+  if($theResult eq "") {
+    push(@theMethods,$methodName);
+    outputNewSymbol();
+    $symWhat="ARGUMENT";  $symName=$theParams;  $symType=$returnType;  $symArgs="";  $symParent=$methodName;
+    outputNewSymbol();
+    print hout "$returnType $methodName($theParams);\n";
+  }
+  $lastMethodName=$methodName;
+}
+
+
+sub addPrimative
+{
+  $symWhat="VAR";  $symName=$primativeName;  $symType=$primativeType;  $symArgs="";  $symParent=$className;
+  validateName($className,"addPrimative className");
+  validateName($lastMethodName,"addPrimative lastMethodName");
+  validateName($symName,"addPrimative symName");
+  validateName($symType,"addPrimative symType");
+  huntForSymbol("VAR",$symName);
+  if($theResult eq "") {
+    push(@thePrimatives,$primativeName);
+    outputNewSymbol();
+    print hout "$primativeType $primativeName;\n";
+  }
+  $lastPrimativeType=$primativeType;
+}
+

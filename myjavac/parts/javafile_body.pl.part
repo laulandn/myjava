@@ -1,0 +1,261 @@
+#! /usr/bin/perl
+
+
+#print "\"theParent\",\"what\",\"theType\",\"theName\",\"theArgs\"\n";
+
+
+# output as C++ declarations instead of symbol table
+my $prettyPrint=0;
+
+
+##########################################################
+##########################################################
+
+my $symWhat="";
+my $symName="";
+my $symType="";
+my $symArgs="";
+my $symParent="";
+#
+my $symProtection="";
+
+my $curlyDepth=0;
+
+my $didSomething=0;
+
+
+##########################################################
+##########################################################
+
+while(<>) {
+  $symName=""; $symType=""; $symArgs="";
+  #$symParent=""; $symProtection="";
+  $didSomething=0;
+  if($didSomething eq 0) {
+    if(/\{/) {
+      $curlyDepth++;
+      #printCurlyDepth();
+      if($prettyPrint eq 1) { if($curlyDepth le 1) { print "{\n"; } }
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+   if(/\}/) {
+      $curlyDepth--;
+      #printCurlyDepth();
+      if($prettyPrint eq 1) { if($curlyDepth eq 1) { print "};\n"; } }
+      $didSomething=1;
+    }
+  }
+#
+  if($didSomething eq 0) {
+    if(/^import (\S*)\.(\S*)\.(\S*);/) {
+      #print "(import)\n";
+      $symParent=$2;
+      $symName=$3;
+      $symType="EXTERNAL";
+      if($symName eq "*") {
+        $symParent=$1;
+        $symName=$2;
+      }
+      newClassSymbol();
+      #print "class $symName; // parent  is $symParent\n";
+      $symParent=$symName;
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^class (\S+) extends (\S+)/) {
+      #print "(class)\n";
+      $symParent=$2;
+      $symName=$1;
+      $symType="";
+      newClassSymbol();
+      #print "class $symName; // parent  is $symParent\n";
+      $symParent=$symName;
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^class (\S+)/) {
+      #print "(class)\n";
+      $symParent="";
+      $symName=$1;
+      $symType="";
+      newClassSymbol();
+      #print "class $symName; // parent  is $symParent\n";
+      $symParent=$symName;
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^public (\S+)\((.*)\)/) {
+      #print "(method)\n";
+      $symName=$1;
+      $symType="";
+      $symArgs=$2;
+      newMethodSymbol();
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^(\S+) (\S+)\;/) {
+      #print "(var)\n";
+      $symName=$2;
+      $symType=$1;
+      $symArgs="";
+      newVarSymbol();
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/^$symParent \((.*)\)/) {
+      #print "(constructor!)\n";
+      $symName=$symParent;
+      $symType="";
+      $symArgs=$1;
+      newMethodSymbol();
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(public) /) {
+      $symProtection=$1;
+      handleMember();
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(private) /) {
+      $symProtection=$1;
+      handleMember();
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(protected) /) {
+      $symProtection=$1;
+      handleMember();
+    }
+  }
+#
+  # this might be useful...
+  $len=length $_;
+  #
+  if(/^$/) {
+    # skip...
+    $didSomething=1;
+  }
+  if(/^ +$/) {
+    # skip...
+    $didSomething=1;
+  }
+#
+  if($didSomething eq 0) {
+    if($curlyDepth ge 2) {
+      chomp $_;
+      print "# ignoring actual code: \"$_\"...\n";
+    }
+    else {
+      chomp $_;
+      print "# skipped line: \"$_\"...\n";
+    }
+  }
+}
+
+
+##########################################################
+##########################################################
+
+sub handleMember
+{
+  #print "Going to handleMember()...\n";
+  if($didSomething eq 0) {
+    if(/class( +)(\S+)/) {
+      # NOTE: not checking curlyDepth on purpose
+      #print "(class)\n";
+      $symName=$2;
+      $symType="LOCAL";
+      newClassSymbol();
+      if($prettyPrint eq 1) {
+        print "class $symName : $symProtection $symParent\n";
+      }
+      $symParent=$symName;
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/class( +)(\S+)( +)extends( +)(\S+)/) {
+      # NOTE: not checking curlyDepth on purpose
+      #print "(class)\n";
+      $symName=$2;
+      $symParent=$5;
+      $symType="LOCAL";
+      newClassSymbol();
+      if($prettyPrint eq 1) {
+        print "class $symName : $symProtection $symParent\n";
+      }
+      $symParent=$symName;
+      $didSomething=1;
+    }
+  }
+  if($didSomething eq 0) {
+    if(/(\S+)( +)(\S+)( +)(\S+)( *)\((.*)\)/) {
+      if($curlyDepth eq 1) {
+        $symType=$3;
+        $symName=$5;
+        $symArgs=$7;
+        newMethodSymbol();
+        if($prettyPrint eq 1) {
+          print "$symProtection: $symType $symParent::$symName($symArgs);\n";
+        }
+        $didSomething=1;
+      }
+    }
+  }
+  if($didSomething eq 0) {
+    # because methods can be mistaken for primatives
+    if(/(\S+)( +)(\S+)\;/) {
+      if($curlyDepth eq 1) {
+        $symName=$3;
+        $symType=$1;
+        newVarSymbol();
+        if($prettyPrint eq 1) {
+          print "$symProtection: $symType $symParent::$symName;\n";
+        }
+        $didSomething=1;
+      }
+    }
+  }
+  if($didSomething eq 0) {
+    # because methods can be mistaken for primatives
+    if(/(\S+)( +)(\S+)( +)(\S+)\;/) {
+      if($curlyDepth eq 1) {
+        $symName=$5;
+        $symType=$3;
+        newVarSymbol();
+        if($prettyPrint eq 1) {
+          print "$symProtection: $symType $symParent::$symName;\n";
+        }
+        $didSomething=1;
+      }
+    }
+  }
+
+}
+
+
+##########################################################
+##########################################################
+
+sub printCurlyDepth
+{
+  print "# curlyDepth=$curlyDepth : ";
+  my $done=0;
+  if($curlyDepth eq 0) { print "outside any classes"; $done=1; }
+  if($curlyDepth eq 1) { print "inside class"; $done=1; }
+  if($curlyDepth eq 2) { print "inside method"; $done=1; }
+  if($done eq 0) { print "inside block"; $done=1; }
+  print "\n";
+}
+
+
+

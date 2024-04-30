@@ -1,0 +1,934 @@
+#! /usr/bin/perl
+
+
+$HOME=$ENV{'HOME'};
+
+
+#my $NJDK_PATH="/home/nick/src/myjava";
+my $NJDK_PATH="$HOME/src/myjava";
+
+my $NJAVAC_PATH="$NJDK_PATH/myjavac";
+my $CLASSLIB_PATH="$NJDK_PATH/NJavaClassLibrary";
+my $CLASSLIBSYMS_NAME="$CLASSLIB_PATH/libNJavaClassLibrary_static.a.syms";
+my $TESTFILE_NAME="the_test_file";
+
+
+# Usage: perl main.pl ThreeD.java
+# Would create file named ThreeD.java.cpp and ThreeD.java.h
+
+
+my $lineNum=0;
+
+my $errorsAreFatal=1;
+my $noEmptyNames=1;
+
+my $doDebug=1;
+my $doWarn=1;
+my $doNote=1;
+my $doError=1;
+my $doUnhandled=1;
+my $doObjDebug=1;
+my $doLineNums=1;
+my $doShowOriginalLine=1;
+
+my $doShowSymbols=1;
+my $doShowPreprocess=1;
+
+my $pretty=1;
+if($pretty eq 1) {
+  $doDebug=0;
+  $doWarn=0;
+  $doNote=0;
+  $doError=0;
+  $doUnhandled=0;
+  $doLineNums=0;
+  $doShowOriginalLine=0;
+  $doShowSymbols=0;
+}
+
+
+my $doCreateMain=0;
+
+my $currentAppletClass=0;
+my $currentMainClass=0;
+
+my $currentPackage=0;
+
+my $funcNotPrimative=0;
+
+
+my $lineWasModified=0;
+my $currentLine="";
+my $originalLine="";
+my $doSkipNewline=0;
+my $doJoinLines=0;
+
+
+my $curlyDepth=0;
+my $parenDepth=0;
+my $squareDepth=0;
+
+# flags for if we need to parse line more carefully
+my $unhandledComma=0;
+my $unhandledEquals=0;
+my $unhandledFor=0;
+my $unhandledParen=0;
+my $unhandledArray=0;
+my $unhandledQuotes=0;
+
+my $workingOnComma=0;
+my $workingOnEquals=0;
+my $workingOnFor=0;
+my $workingOnParen=0;
+my $workingOnArray=0;
+my $workingOnQuote=0;
+
+
+my $symWhat="";
+my $symName="";
+my $symType="";
+my $symArgs="";
+my $symParent="";
+#
+my $symProtection="";
+
+
+# All class names discovered
+my @theClasses=(null);
+my $theClass="NULL";
+
+# All objects discovered and converted to pointers
+my $thePointer="NULL";
+
+# All methods of all classes discovered
+my @theMethods=(null);
+my $lastMethodName="NULL";
+
+# All privatives discovered
+my @thePrimatives=(null);
+my $lastPrimativeType="NULL";
+
+
+my $currentLVAL="NULL";
+my $currentRVAL="NULL";
+
+
+# These first ones are from the first stage preprocessor
+my $ppVerb="";
+my $ppNote="";
+my $ppReset="";
+#
+my $ppModifier="";
+my $ppHas="";
+my $ppIs="";
+#
+my $ppType="";
+my $ppRHand="";
+my $ppLHand="";
+my $ppTHand="";
+my $ppRHandDot="";
+my $ppLHandDot="";
+#
+my $ppHasOpenParen=0;
+my $ppHasCloseParen=0;
+my $ppHasBothParens=0;
+my $ppHasComma=0;
+my $ppHasDot=0;
+my $ppHasSemicolon=0;
+my $ppHasEqual=0;
+my $ppHasOpenCurly=0;
+my $ppHasCloseCurly=0;
+
+
+my $JAVAFILE_NAME=$ARGV[0];
+open(fin,"$JAVAFILE_NAME");
+#
+my $CPPFILE_NAME="$JAVAFILE_NAME.cpp";
+$CPPFILE_NAME =~ s/.final//g;
+open(fout,">$CPPFILE_NAME");
+#
+my $HFILE_NAME="$JAVAFILE_NAME.h";
+$HFILE_NAME =~ s/.final//g;
+open(hout,">$HFILE_NAME");
+#
+my $TEST_CPPFILE_NAME="$TESTFILE_NAME.java.cpp";
+my $TEST_HFILE_NAME="$TESTFILE_NAME.java.h";
+#
+if($doNote eq 1) {
+  print fout "// NOTE: JAVAFILE_NAME is $JAVAFILE_NAME\n";
+  print fout "// NOTE: CPPFILE_NAME is $CPPFILE_NAME\n";
+  print fout "// NOTE: HFILE_NAME is $HFILE_NAME\n";
+  print fout "// NOTE: TEST_CPPFILE_NAME is $TEST_CPPFILE_NAME\n";
+  print fout "// NOTE: TEST_HFILE_NAME is $TEST_HFILE_NAME\n";
+}
+
+
+# always include this file for basic types and internal stuff
+print fout "#include \"$CLASSLIB_PATH/njavacpp.h\"\n";
+print fout "#include \"$CLASSLIB_PATH/java/lang/System.h\"\n";
+print fout "#include \"$CLASSLIB_PATH/java/lang/Integer.h\"\n";
+
+
+# Symbol table file
+# NOTE: Hardcoded to java (not android) for now...
+my $SYMSFILE_NAME="$CPPFILE_NAME.syms";
+if(-e $CLASSLIBSYMS_NAME) {
+  $cmd="cp $CLASSLIBSYMS_NAME $SYMSFILE_NAME";
+  #print "$cmd\n";
+  system($cmd);
+}
+else {
+  print "Couldn't open sym file \"$CLASSLIBSYMS_NAME\"!\n";
+  #print "Exiting...\n";
+  exit(EXIT_FAILURE);
+}
+open(fsyms,">>$SYMSFILE_NAME");
+
+
+while(<fin>) {
+  $lineWasModified=0;
+  #
+  # Is reseting these here right?
+  $unhandledComma=0;
+  $unhandledEquals=0;
+  $unhandledFor=0;
+  $unhandledParen=0;
+  $unhandledArray=0;
+  #
+  $currentLine=$_;
+  $originalLine=$_;
+#
+  if(/\/\/\/ (\S+) (\S+)(.*)/) {
+    $ppVerb=$1;
+    $ppNote=$2;
+    $ppRest=$3;
+    #if($doShowPreprocess eq 1) { print fout "/// $ppVerb $ppNote $ppRest\n"; }
+    handlePPNote();
+    #$currentLine="";
+    #$_="";
+    #$originalLine="";
+    #$lineWasModified=1;
+    #print fout "blah\n";
+  }
+  else {
+    readingStatements();
+    doCorrections();
+    doOutputLine();
+  }
+}
+
+
+createMainIfNeeded();
+
+
+close($fin);
+close($fout);
+close($hout);
+close($fsyms);
+
+
+$cmd="cp $CPPFILE_NAME $CPPFILE_NAME.tmp";
+#system($cmd);
+if($pretty eq 0) {
+  #$cmd="cp $CPPFILE_NAME.tmp $CPPFILE_NAME";
+  #system($cmd);
+}
+else {
+  # ???
+  #$cmd="perl despace.pl <$CPPFILE_NAME.tmp >$CPPFILE_NAME";
+  #system($cmd);
+}
+
+
+exit(EXIT_SUCCESS);
+
+
+sub printCurrentLine
+{
+  checkCurrentLineForProblems();
+  my $doPrint=0;
+  #if($currentLine eq "") { $doPrint=0; }
+  #if($currentLine eq "\n") { $doPrint=0; }
+  if(length($currentLine)) { $doPrint=1; }
+  if($doPrint eq 1) { print fout "$currentLine"; }
+}
+
+
+sub checkCurrentLineForProblems
+{
+  my $ok=1;
+  # Doesn't actually do anything yet...
+  if($ok eq 0) { errorOut("checkCurrentLineForProblems() failed!\n"); }
+}
+
+
+sub doCorrections
+{
+  if($ppHasDot eq 1) {
+    if($ppRHandDot =~ /^\d/) {
+    }
+    else {
+      $_ =~ s/\./\-\>/g;
+      $lineWasModified=1;
+    }
+  }
+}
+
+
+sub handlePPNote
+{
+  my $understood=0;
+  if($ppVerb eq "line") {
+    # remember if you add more reset them here!
+    $ppModifier="";
+    $ppIs="";
+    $ppType="";
+    $ppHas="";
+    $ppRHand="";
+    $ppLHand="";
+    $ppTHand="";
+    $ppHasOpenParen=0;
+    $ppHasCloseParen=0;
+    $ppHasBothParens=0;
+    $ppHasComma=0;
+    $ppHasDot=0;
+    $ppHasSemicolon=0;
+    $ppHasEqual=0;
+    $ppHasOpenCurly=0;
+    $lineNum=$ppNote;
+    $understood=1;
+  }
+#
+  if(/lhand\=\"(.*)\" rhand\=\"(.*)\"/) {
+    $ppLHand=$1;
+    $ppRHand=$2;
+  }
+  else {
+    $ppLHand="";
+    $ppRHand="";
+  }
+  if(/ thand\=\"(.*)\"/) {
+    $ppTHand=$1;
+  }
+  else {
+    $ppTHand="";
+  }
+#
+  if($ppVerb eq "modifier") {
+    $ppModifier=$ppNote; $ppLHand=$ppRest; $understood=1;
+    #print "ppModifier=$ppModifier\n";
+  }
+  if($ppVerb eq "type") {
+    $ppType=$ppNote; $ppLHand=$ppRest; $understood=1;
+    ##print "ppType=$ppType\n";
+  }
+#
+  if($ppVerb eq "is") {
+    $ppIs=$ppNote; $understood=1;
+    if($ppNote eq "for")  {
+      $ppIs=$ppNote;
+      $ppRHand=$ppNote; $ppLHand=""; $ppTHand="";
+    }
+  }
+#
+  if($ppVerb eq "has") {
+    $ppHas=$ppNote; $understood=1;
+    if($ppNote eq "semicolon")  { $ppHasSemicolon=1; $understood=1; }
+    if($ppNote eq "comma")  { $ppHasComma=1; $understood=1; }
+    if($ppNote eq "dot")  {
+      $ppHasDot=1;
+      $ppRHandDot=$ppRHand; $ppLHandDot=$ppLHand;
+    }
+    if($ppNote eq "equal")  {
+      $ppHasEqual=1;
+      $ppRHandEqual=$ppRHand; $ppLHandEqual=$ppLHand;
+    }
+    if($ppNote eq "openparen")  { $ppHasOpenParen=1; }
+    if($ppNote eq "closeparen")  { $ppHasCloseParen=1; }
+    if($ppNote eq "bothParens")  {
+      $ppHasBothParens=1;
+      $ppLHand=$ppRest; $ppRHand=""; $ppTHand="";
+      checkAndFixParams();
+    }
+    if($ppNote eq "bothSquare")  {
+      $ppHasBothParens=1; $understood=1;
+      $ppLHand=$ppRest; $ppRHand=""; $ppTHand="";
+      checkAndFixArray();
+    }
+    if($ppNote eq "bothCurlies")  {
+      $ppHasBothParens=1;
+      $ppLHand=$ppRest; $ppRHand=""; $ppTHand="";
+    }
+    if($ppNote eq "bothSingQuotes")  {
+      $ppHasBothParens=1;
+      $ppLHand=$ppRest; $ppRHand=""; $ppTHand="";
+    }
+    if($ppNote eq "bothDoubQuotes")  {
+      $ppHasBothParens=1;
+      $ppLHand=$ppRest; $ppRHand=""; $ppTHand="";
+    }
+  }
+#
+  if($understood eq 1) {
+    debugOut("pp \"$ppVerb\" \"$ppNote\" \"$ppLHand\" \"$ppRHand\" \"$ppTHand\"");
+  }
+  if($understood eq 0) {
+    debugOut("unused ppverb=$ppVerb ppnote=$ppNote!\n");
+  }
+}
+
+
+sub checkAndFixParams
+{
+  if($ppModifier eq "") { }
+  else {
+    if($ppLHand =~ /\"(\w+) (.+)\"/) {
+      $aClass=$1;
+      $aName=$2;
+      huntForSymbol("CLASS",$aClass);
+      if($theResult eq "") { }
+      else {
+        $ppLHand="$aClass *$aName";
+        if($currentLine =~ /(.*)(\Q$aClass\E \Q$aName\E)(.*)/) {
+          #print "checkAndFixParams is $currentLine\n";
+          $currentLine="$1$aClass \*$aName$3";
+          #print "checkAndFixParams should be $currentLine\n";
+        }     
+
+      }
+    }
+  }
+}
+
+
+sub checkAndFixArray
+{
+  # Doesn't actually do anything yet...
+}
+
+
+sub readingStatements
+{
+#
+  # ignore blank lines
+  if(/^\n$/) {
+    $_="";
+    $doSkipNewline=1;
+    $lineWasModified=1;
+  }
+#
+  checkForSingleCharacters();
+#
+  checkForWords();
+#
+  if($lineWasModified eq 0) {
+    #debugOut("Still working on this line...");
+    #checkDeclaration();
+  }
+#
+}
+
+
+##########################################################
+##########################################################
+
+sub checkForSingleCharacters
+{
+#
+  if(/^(.*)\{(.*)$/) {
+    $curlyDepth++;
+    #print fout "{\n";
+    if($curlyDepth eq 1) {
+      print hout "{\n";
+    }
+    #if($curlyDepth eq 2) {
+    #  print hout "{\n";
+    #}
+    debugOut("curlyDepth=$curlyDepth");
+    #$lineWasModified=1;
+  }
+#
+  if(/^(.*)\}(.*)$/) {
+    $curlyDepth--;
+    if($curlyDepth eq 0) {
+      print fout "};\n";
+      print hout "};\n";
+    }
+    else {
+      my $count=$curlyDepth-1;
+      my $t=0;
+      while($t le $count) {
+        print fout "  "; $t++;
+      }
+      print fout "}\n";
+      #if($curlyDepth eq 1) {
+      #  print hout "}\n";
+      #}
+    }
+    debugOut("curlyDepth=$curlyDepth");
+    $_="";
+    $currentLine="";
+    $lineWasModified=1;
+  }
+#
+  #if(/(\ *)(.+)\.(.*)/) {
+  #  if($curlyDepth ge 1) {
+  #    debugOut("object ref converted to pointer ref");
+  #    print fout "$1$2->$3\n";
+  #  }
+  #  $lineWasModified=1;
+  #}
+#
+  if(/(.*)\,(.*)/) {
+    #debugOut("Look out!  There's a comma!");
+    # This is specially handled
+    $unhandledComma=1;
+  }
+#
+  if(/(.*)\((.*)/) {
+    #debugOut("Look out!  There's an open paren sign!");
+    # This is specially handled
+    $unhandledParen=1;
+    $parenDepth++;
+  }
+#
+  if(/(.*)\)(.*)/) {
+    #debugOut("Look out!  There's a close paren sign!");
+    # This is specially handled
+    $unhandledParen=1;
+    $parenDepth--;
+  }
+#
+  if(/(.*)\[(.*)/) {
+    #debugOut("Look out!  There's an open paren sign!");
+    # This is specially handled
+    $unhandledArray=1;
+    $squareDepth++;
+  }
+#
+  if(/(.*)\](.*)/) {
+    #debugOut("Look out!  There's a close paren sign!");
+    # This is specially handled
+    $unhandledArray=1;
+    $squareDepth--;
+  }
+#
+ if(/(.*)\"(.*)/) {
+    debugOut("Look out!  There's a double quote!");
+    # This is specially handled
+    if($workingOnQuote eq 0) {
+      noteOut("Now inside quotes");
+      $workingOnQuote=1;
+    }
+    else {
+      noteOut("Now outside quotes");
+      $workingOnQuote=0;
+    }
+  }
+#
+  if(/(.*)\=(.*)/) {
+    #debugOut("Look out!  There's an equals sign!");
+    # This is specially handled
+    $unhandledEquals=1;
+  }
+}
+
+
+sub checkForWords
+{
+  #print "checkForWords!!!\n";
+  # NOTE: include path is hard coded here for my class library
+  # NOTE: Probably should check that we aren't inside any brackets here...
+  if(/^import (.*)/) {
+    #noteOut("import dot to slash");
+    $_ =~ s/\./\//g;
+    $ppHasDot=0;
+  }
+  if(/^import (.+)\/(.+)\/([a-zA-Z\*]+)( *)\;$/) {
+    #noteOut("import -> include: $_");
+    $grandparentName=$1;
+    $parentName=$2;
+    $className=$3;
+    #debugOut("grandparentName is \"$grandparentName\"");
+    #debugOut("parentName is \"$parentName\"");
+    #debugOut("className is \"$className\"");
+    my $ppfix="$CLASSLIB_PATH/";
+    my $slash="/";
+    if($parentName eq $currentPackage) {
+      $parentName="";
+      $ppfix="";
+      $slash="";
+    }
+    if($className eq "*") {
+      $className=$parentName;
+      $parentName=$grandparentName;
+      $incName="$parentName$slash$className";
+    }
+    else {
+      $incName="$grandparentName$slash$parentName$slash$className";
+    }
+    validateName($incName,"import");
+    #debugOut("incName is \"$incName\"");
+    $_="#include \"$ppfix$incName.h\"";
+    addClassExternal();
+    $lineWasModified=1;
+    return;
+  }
+#
+  if(/^package (.*)/) {
+    $_ =~ s/\./\//g;
+  }
+  if(/^package (.+)\/(.+)\;$/) {
+    noteOut("package -> namespace");
+    $parentName=$1;
+    $className=$2;
+    # where'd that space come from?
+    $className =~ s/ //g;
+    $currentPackage="$parentName/$className";
+    #debugOut("parentName is \"$parentName\"");
+    #debugOut("className is \"$className\"");
+    #noteOut("We are now in package \"$currentPackage\"");
+    $_="// namespace $className;\n";
+    $lineWasModified=1;
+    return;
+  }
+#
+  if(/^( *)\@Override(.*)$/) {
+    warnOut("Override support not implemented yet!");
+    $className=$2;
+    #debugOut("className is \"$className\"");
+    $_="// $_";
+    $lineWasModified=1;
+    return;
+  }
+#
+  # remove synchronized keyword
+  if(/(.*)synchronized (.+)/) {
+    $_ =~ s/synchronized //g;
+  }
+#
+  # remove final keyword
+  if(/(.*)final (.+)/) {
+    $_ =~ s/final /const /g;
+  }
+#
+  # remove static keyword
+  if(/(.*)static (.+)/) {
+    $_ =~ s/static //g;
+  }
+#
+  # NOTE: j prefix is hard coded for my class library
+  # NOTE: Probably should check that we aren't inside any brackets here...
+  if(/(.*)class\ (.+)\ extends\ (\S+)/) {
+    $_="\nclass $2 : public $3";
+    $className=$2;
+    $parentClassName=$3;
+    #debugOut("parentName is \"$parentName\"");
+    #debugOut("className is \"$className\"");
+    print hout "class $className : public $parentClassName\n";
+    addClass();
+    $className=$parentClassName;
+    if($parentClassName eq "Applet") { $doCreateMain=1; $currentAppletClass=$className; }
+    if($parentClassName eq "Activity") { $doCreateMain=1; $currentAppletClass=$className; }
+    addClassExternal();
+    $lineWasModified=1;
+    $theClass=$2;
+    #debugOut("theClass is \"$theClass\"");
+    $className=$2;
+    #noteOut("About to be inside class \"$theClass\" w/ extends");
+    return;
+  }
+#
+  # NOTE: j prefix is hard coded for my class library
+  # NOTE: Probably should check that we aren't inside any brackets here...
+  if(/(.*)class\ (.+)\ extends\ (\S+)\ implements\ (\S+)/) {
+    $_="\nclass $2 : public j$3 // Also implements class \"$4\".";
+    $className=$2;
+    $parentClassName=$3;
+    $implementsClassName=$4;
+    #debugOut("parentName is \"$parentName\"");
+    #debugOut("className is \"$className\"");
+    #debugOut("implementsClassName is \"$implementsClassName\"");
+    print hout "class $className : public $parentClassName\n";
+    addClass();
+    $className=$parentClassName;
+    if($parentClassName eq "Applet") { $doCreateMain=1; $currentAppletClass=$className; }
+    if($parentClassName eq "Activity") { $doCreateMain=1; $currentAppletClass=$className; }
+    addClassExternal();
+    $className=$implementsClassName;
+    addClassExternal();
+    $lineWasModified=1;
+    $theClass=$2;
+    #debugOut("theClass is \"$theClass\"");
+    $className=$2;
+    #noteOut("About to be inside class \"$theClass\" w/ implements\n");
+    return;
+  }
+#
+  if(/(.*)class\ (\S+)/) {
+    # It wasn't one of the above
+    if($lineWasModified eq 0) {
+      $_="\nclass $2";
+      $className=$2;
+      #debugOut("className is \"$className\"");
+      print hout "class $className\n";
+      addClass();
+      $lineWasModified=1;
+      $theClass=$2;
+      #debugOut("theClass is \"$theClass\"");
+      noteOut("About to be inside class \"$theClass\" no superclass\n");
+      return;
+    }
+  }
+#
+  if(/( *)public +(\S+) +(\S+) *\((.*)\)(.*)/) {
+      #debugOut("public!!!");
+      $someSpaces=$1;
+      $returnType=$2;
+      $methodName=$3;
+      $lastMethodName=$methodName;
+      #$theParams=$4;
+      $theParams="$aClass *$aName";
+      $theRest=$5;
+      #handleParams();
+      #handleTheRest();
+      print hout "public: $returnType $methodName($theParams);\n";
+      addMethod();
+      $lineWasModified=1;
+      if($methodName eq "main") { $doCreateMain=1; $currentMainClass=$theClass; }
+      #noteOut("About to be inside public method \"$returnType\" \"$theClass\"::\"$methodName\"(\"$theParams\")");
+      $_="$someSpaces public: $returnType $methodName($theParams)$theRest";
+      return;
+  }
+#
+  if(/( *)protected +(\S+) *(\S+) *\((.*)\)(.*)/) {
+      #debugOut("protected!!!");
+      $someSpaces=$1;
+      $returnType=$2;
+      $methodName=$3;
+      $lastMethodName=$methodName;
+      $theParams=$4;
+      $theRest=$5;
+      $_="$someSpaces protected: $returnType $methodName($theParams)$theRest";
+      addMethod();
+      $lineWasModified=1;
+      print hout "protected: $returnType $methodName ($theParams);\n";
+      #noteOut("About to be inside protected method \"$returnType\" \"$theClass\"::\"$methodName\"(\"$theParams\")");
+      return;
+    }
+  }
+#
+  if(/( *)private +(\S+) *(\S+) *\((.*)\)(.*)/) {
+      #debugOut("private!!!");
+      $someSpaces=$1;
+      $returnType=$2;
+      $methodName=$3;
+      $lastMethodName=$methodName;
+      $theParams=$4;
+      $theRest=$5;
+      $_="$someSpaces private: $returnType $methodName($theParams)$theRest";
+      addMethod();
+      $lineWasModified=1;
+      print hout "private: $returnType $methodName ($theParams);\n";
+      #noteOut("About to be inside private method \"$returnType\" \"$theClass\"::\"$methodName\"(\"$theParams\")");
+      return;
+  }
+#
+  if(/(.*)super(.*)/) {
+    warnOut("support for \"super\" not fully implemented yet!");
+    $_="// Disabled \"$1super($2);\" statement here!";
+    $lineWasModified=1;
+  }
+#
+  if(/(\ *)(\S*)(\ *)\=(\ *)new(\ *)(\S*)(\ *)(.*)\;/) {
+    #debugOut("found a \"new\"");
+    $pointerName=$2;
+    validateName($pointerName,"new");
+    $className=$6;
+    validateName($className,"new");
+    $theParams=$8;
+    $_="$1$className \*$pointerName=new $className($theParams);";
+    debugOut("// \"new\" statement: \"$pointerName\" is new \"$className\" with params \"$8\"");
+    $lineWasModified=1;
+}
+
+
+##########################################################
+##########################################################
+
+sub createMainIfNeeded
+{
+  if($doCreateMain eq 1) {
+    print fout "\n";
+    print fout "\n";
+    print fout "// NOTE: Automatically generated main()\n";
+    print fout "\n";
+    print fout "#include \"$NJDK_PATH/../cpp/guilib/AApp.h\"\n";
+    print fout "\n";
+    print fout "\n";
+    print fout "int main(int argc,char **argv)\n";
+    print fout "{\n";
+    print fout "  aThisApp->start(argc,argv);\n";
+    print fout "  System=new __njsystemInternal;\n";
+    print fout "  $theClass *theApp=new $theClass;\n";
+    if($currentAppletClass eq 0) {
+    }
+    else {
+      print fout "  theApp->run();\n";
+      print fout "  theApp->start();\n";
+    }
+    if($currentMainClass eq 0) {
+    }
+    else {
+      print fout "  String __njinternalArgv={ \"foo\" };\n";
+      print fout "  theApp->main((String **)&__njinternalArgv);\n";
+    }
+    print fout "  return 0;\n";
+    print fout "}\n";
+    print fout "\n";
+  }
+}
+
+
+sub doOutputLine
+{
+  if($doLineNums eq 1) { if($originalLine eq "") { } else { print fout "// line# $lineNum\n"; } }
+  #
+  if($doShowOriginalLine eq 1) { if($originalLine eq "") { } else { print fout "// originalLine is $originalLine"; } }
+  #
+  if($lineWasModified eq 1) {
+    #print fout "// line was handled\n";
+    my $t=0;
+    if($doJoinLines eq 0) {
+      if($curlyDepth eq 0) { }
+      else {
+        my $count=$curlyDepth-1;
+        #if($currentLine =~ /\{/) { $count-=2; }
+        my $t=0;
+        while($t le $count) {
+          print fout "  "; $t++;
+        }
+      }
+    }
+    if($doSkipNewline eq 0) {
+      $currentLine=$_;
+      chomp($currentLine);
+      $currentLine =~ s/ +$//g;
+      #$currentLine =~ s/^\n+$//g;
+      printCurrentLine();
+      if($pretty eq 1) {
+        if($doJoinLines eq 1) {
+          $doJoinLines=0;
+        }
+        else {
+          if($currentLine eq "") { } else { print fout "\n"; }
+        }
+      }
+      else {
+        print fout "bar\n";
+      }
+    }
+    else {
+      $doSkipNewline=0;
+    }
+  }
+  else {
+    if($currentLine eq "\n") {
+      print fout "bazbazbaz\n";
+    }
+    else {
+      if($doUnhandled eq 1) { noteOut("line was passed through unchanged"); }
+      my $t=0;
+      if($curlyDepth eq 0) {
+      }
+      else {
+        my $count=$curlyDepth-1;
+        if($currentLine =~ /\{/) { $count-=1; }
+        my $t=0;
+        while($t le $count) {
+          print fout "  "; $t++;
+        }
+      }
+      printCurrentLine();
+    }
+  }
+}
+
+
+sub validateName
+{
+  my $theName=shift;
+  my $theFunc=shift;
+  $theName =~ s/^ //;
+  $theName =~ s/ $//;
+  #print "validateName theFunc=\"$theFunc\", theName=\"$theName\"\n";
+  if($theName eq "") {
+    if($noEmptyNames eq 1) { errorOut("$theFunc, name is empty!"); }
+    else { warnOut("$theFunc, name is empty!"); }
+  }
+}
+
+
+##########################################################
+##########################################################
+
+sub huntForSymbol
+{
+  my $theHuntType=shift;
+  my $theHuntName=shift;
+  $theHuntName =~ s/^ +//g;
+  my $theGrep="grep -m 1 \"\\\".*\\\",\\\"$theHuntType\\\",\\\".*\\\",\\\"$theHuntName\\\",\\\".*\\\"\" $SYMSFILE_NAME";
+  #print "huntForSymbol: $theGrep\n";
+  $theResult=`$theGrep`;
+  #print "RESULT_START \"$theResult\" RESULT_END\n";
+}
+
+
+##########################################################
+##########################################################
+
+sub debugOut
+{
+  if($doDebug eq 1) {
+    my $theDebug=shift;
+    print fout "// DEBUG: $theDebug\n";
+  }
+}
+
+
+sub warnOut
+{
+  if($doWarn eq 1) {
+    my $theWarn=shift;
+    print fout "// WARNING: $theWarn\n";
+    print "WARNING: line $lineNum, $theWarn\n";
+  }
+}
+
+
+sub noteOut
+{
+  if($doNote eq 1) {
+    my $theNote=shift;
+    print fout "// NOTE: $theNote\n";
+  }
+}
+
+
+sub errorOut
+{
+  my $theError=shift;
+  if($errorsAreFatal eq 1) {
+    print fout "// FATAL ERROR: $theError\n";
+    print hout "// FATAL ERROR: $theError\n";
+    print "FATAL ERROR: line $lineNum, $theError\n";
+    exit(EXIT_FAILURE);
+  }
+  if($doError eq 1) {
+    print fout "// ERROR: $theError\n";
+    print "ERROR: line $lineNum, $theError\n";
+  }
+}
+
+
+

@@ -1,0 +1,130 @@
+#! /usr/bin/perl
+
+
+# can be cpp, java or objc...one day
+$theLang="cpp";
+$theFiletype="header";
+
+
+$theClass="UNKNOWN";
+
+$inVars=0;
+
+
+while(<>) {
+  my $handled=0;
+  if(/\"(.*)\",\"(.*)\",\"(.*)\",\"(.*)\",\"(.*)\"/) {
+    $symParent=$1;
+    $symWhat=$2;
+    $symType=$3;
+    $symName=$4;
+    $symArgs=$5;
+    #print "// \"$symParent\",\"$symWhat\",\"$symType\",\"$symName\",\"$symArgs\"\n";
+    # catch stupid parse error in syms_cpp
+    if($symType eq "return") { $symWhat="ERROR"; }
+    #
+    $isVirtual=0;
+    if($symWhat eq "CLASS") { doClass(); }
+    if($symWhat eq "METHOD_0") { doMethod(); }
+    if($symWhat eq "METHOD_0") { doMethod(); }
+    if($symWhat eq "VMETHOD_0") { $isVirtual=1; doMethod(); }
+    if($symWhat eq "VMETHOD_A") { $isVirtual=1; doMethod(); }
+    if($symWhat eq "VAR") { doVar(); }
+    if($symWhat eq "ARRAY") { doArray(); }
+    if($symWhat eq "ERROR") { print "### skipped erroneous \"return $symName\"\n"; }
+  }
+  else {
+    if(/.skipped line\:/) { }
+    else { print "# skipped: $_"; }
+  }
+}
+
+print "};\n";
+
+exit(0);
+
+
+sub doClass
+{
+  # closing bracket
+  if($theClass eq "UNKNOWN") { }
+  else { print "};\n"; print "\n\n"; }
+  # name
+  print "class ";
+  print "$symName";
+  # parent, if any
+  if($symParent eq "UNKNOWN") { }
+  else { print " : public $symParent"; }
+  #print "  // class";
+  print "\n{";
+  if($theMode eq "java") {
+    print "\n";
+  }
+  else {
+    print "\n";
+    print "public:";  # for now since we don't have that info for menthods
+  }
+  print "\n";
+  $theClass=$symName;
+}
+
+
+sub doMethod
+{
+  $theType=$symType;
+  $theName=$symName;
+  if($symArgs eq "") { $theArgs="void"; } else { $theArgs=$symArgs; }
+  print "  ";
+  # all java are public (for now)
+  if($theMode eq "java") { print "public "; }
+  # virtual
+  if($isVirtual eq 1) { print "virtual "; }
+  # return type
+  if($symType) { print "$theType "; }
+  # name
+  print "$theName";
+  # args
+  print "(";
+  if($theArgs) { print "$theArgs"; }
+  print ")";
+  #print "  // method";
+  # empty code if java
+  if($theMode eq "java") {
+    print "\n";
+    print "  {\n";
+    print "    // TODO: code goes here\n";
+    print "  }\n";
+    print "\n";
+  }
+  else { print ";\n"; }
+}
+
+
+sub doVar
+{
+  if($inVars eq false) { print "  #\n";  $inVars=1; }
+  print "  ";
+  # type
+  print "$symType";
+  # name
+  print " $symName";
+  print ";";
+  #print "  // var";
+  print "\n";
+}
+
+
+sub doArray
+{
+  if($inVars eq false) { print "  #\n";  $inVars=1; }
+  print "  ";
+  # type
+  print "$symType";
+  # name
+  print " $symName\[";
+  print "blah";
+  print "\];";
+  #print "  // array";
+  print "\n";
+}
+

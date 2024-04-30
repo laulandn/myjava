@@ -1,0 +1,62 @@
+
+# Custom Makefile for now
+
+
+include ../../Makefile.common
+
+
+############
+
+
+all:	main.pl syms_javafile.pl syms_cppfile.pl yy.lex.c njc
+
+
+############
+
+
+yy.lex.c:	njc.l
+	lex njc.l
+
+njc:	yy.lex.c
+	gcc -o njc yy.lex.c
+
+
+############
+
+
+main.pl:
+	cat main.pl.part add.pl.part new.pl.part output.pl.part validate.pl.part >main.pl
+
+syms_javafile.pl:
+	cat syms_javafile.pl.part add.pl.part new.pl.part output.pl.part validate.pl.part >syms_javafile.pl
+
+syms_cppfile.pl:
+	cat syms_cppfile.pl.part add.pl.part new.pl.part output.pl.part validate.pl.part >syms_cppfile.pl
+
+
+############
+
+
+clean:
+	rm main.pl syms_javafile.pl syms_cppfile.pl
+	rm yy.lex.c
+	rm *.o
+	rm -rf resource.frk RESOURCE.FRK finder.dat FINDER.DAT
+
+fix:
+	chmod -x Makefile* *.html *.xml *.txt
+	chmod -x *.zip
+	chmod -x *.part
+	chmod +x *.pl *.sh
+	$(REZ_TOOLPATH)/SetFile -c CWIE -t TEXT configure *.h *.cpp *.c
+	$(REZ_TOOLPATH)/SetFile -c CWIE -t TEXT Makefile* *.txt
+	$(REZ_TOOLPATH)/SetFile -c Gzip -t Gzip *gz
+
+
+remove_depends:
+
+
+depends:
+
+
+include ../Makefile.tail

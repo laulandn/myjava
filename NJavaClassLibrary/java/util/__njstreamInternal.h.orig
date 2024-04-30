@@ -1,0 +1,30 @@
+#ifndef NICKVM_JAVAC_STREAM_H
+#define NICKVM_JAVAC_STREAM_H
+
+
+// IMPORTANT!  This file is machine read!
+// Please follow formatting and layout EXACTLY!
+
+
+#include "../../njavacpp.h"
+
+
+#include "../NJString.h"
+
+
+class NJInternalStream : public __njobjectInternal {
+public:
+  NJInternalStream();
+  //
+  void println();
+  void print(int i);
+  void println(int i);
+  void print(const char *s);
+  void println(const char *s);
+  //
+protected:
+};
+
+
+#endif
+

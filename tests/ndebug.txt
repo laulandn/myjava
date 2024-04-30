@@ -1,0 +1,33 @@
+**********************************
+NLIB DEBUG OUTPUT BEGINS
+NLIB version: 17.9
+NOTE: sizeof(long)==8
+NOTE: sizeof(char *)==8
+NOTE: _LP64 is set!
+NOTE: __LP64__ is set!
+NOTE: __WORDSIZE == 64!
+BYTE_ORDER=1234 (little-endian)
+****
+****
+os "unknown" version: 0.0
+Args:
+0:/home/nick/more_src/nlib/cnlines
+init_fonts() called...
+about to open_window()...
+open_window()...
+open_display()...
+Requesting display: 0x0x0
+(open_display done...is 80,24,4/1)
+n_palette dump:
+16 colors 24-bit mapper score 
+(open_window done...is 80,24)
+n_display dump:
+80x24x4(4) planes=1 min/max=1/1 windowCount=1 chunky origColors 
+n_window dump:
+80x24x4 planes=1 @0,0 chunky colors 
+about to do initial draw...
+draw_lines()...
+Window is: 80x24x4(1) numColors=16
+inc(w)=1
+inc(h)=1
+about to loop...

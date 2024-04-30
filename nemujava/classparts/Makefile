@@ -1,0 +1,151 @@
+
+LIBNAME=$(shell basename $(shell pwd))
+LDNAME=lib$(LIBNAME)_static.a
+
+####################################################################
+# Makefile
+####################################################################
+
+PATH_TO_BASE=../..
+
+include $(PATH_TO_BASE)/../Makefile.target
+include $(PATH_TO_BASE)/../Makefile.common
+
+EXTRA_FLAGS=-I$(PATH_TO_BASE) -I.. -DNEMU_INCLUDE_JAVA=1
+EXTRA_LDFLAGS=-L$(PATH_TO_BASE)
+
+
+###################################################################
+# Our objects
+###################################################################
+
+PROGRAMS=test_classfile
+DIRS=$(wildcard */)
+OBJS=$(subst .cpp,.$(OFILE),$(wildcard *.cpp))
+
+
+####################################################################
+# The libraries and programs 
+####################################################################
+
+PATH_TO_CPP=../../cpp
+
+
+ALIB_NAME=alib_static
+ALIB_L=-Lalib -l$(ALIB_NAME)
+ALIB_LIB=lib$(ALIB_NAME).$(AFILE)
+ALIB_PATH=$(PATH_TO_CPP)/alib/$(ALIB_LIB)
+
+DECODER3D_NAME=decode3d_static
+DECODER3D_L=-Ldecode3d -l$(DECODER3D_NAME)
+DECODER3D_LIB=lib$(DECODER3D_NAME).$(AFILE)
+DECODER3D_PATH=$(PATH_TO_CPP)/decode3d/$(DECODER3D_LIB)
+
+DECODEIMG_NAME=decodeimg_static
+DECODEIMG_L=-Ldecodeimg -l$(DECODEIMG_NAME)
+DECODEIMG_LIB=lib$(DECODEIMG_NAME).$(AFILE)
+DECODEIMG_PATH=$(PATH_TO_CPP)/decodeimg/$(DECODEIMG_LIB)
+
+DECODERLIB_NAME=decoderlib_static
+DECODERLIB_L=-Ldecoderlib -l$(DECODERLIB_NAME)
+DECODERLIB_LIB=lib$(DECODERLIB_NAME).$(AFILE)
+DECODERLIB_PATH=$(PATH_TO_CPP)/decoderlib/$(DECODERLIB_LIB)
+
+DECODESND_NAME=decodesnd_static
+DECODESND_L=-Ldecodesnd -l$(DECODESND_NAME)
+DECODESND_LIB=lib$(DECODESND_NAME).$(AFILE)
+DECODESND_PATH=$(PATH_TO_CPP)/decodesnd/$(DECODESND_LIB)
+
+GUILIB_NAME=guilib_static
+GUILIB_L=-Lguilib -l$(GUILIB_NAME)
+GUILIB_LIB=lib$(GUILIB_NAME).$(AFILE)
+GUILIB_PATH=$(PATH_TO_CPP)/guilib/$(GUILIB_LIB)
+
+NETLIB_NAME=netlib_static
+NETLIB_L=-Lnetlib -l$(NETLIB_NAME)
+NETLIB_LIB=lib$(NETLIB_NAME).$(AFILE)
+NETLIB_PATH=$(PATH_TO_CPP)/netlib/$(NETLIB_LIB)
+
+NICK3D_NAME=nick3d_static
+NICK3D_L=-Lnick3d -l$(NICK3D_NAME)
+NICK3D_LIB=lib$(NICK3D_NAME).$(AFILE)
+NICK3D_PATH=$(PATH_TO_CPP)/nick3d/$(NICK3D_LIB)
+
+OSLIB_NAME=oslib_static
+OSLIB_L=-Loslib -l$(OSLIB_NAME)
+OSLIB_LIB=lib$(OSLIB_NAME).$(AFILE)
+OSLIB_PATH=$(PATH_TO_CPP)/oslib/$(OSLIB_LIB)
+
+QTIMELIB_NAME=qtimelib_static
+QTIMELIB_L=-Lqtimelib -l$(QTIMELIB_NAME)
+QTIMELIB_LIB=lib$(QTIMELIB_NAME).$(AFILE)
+QTIMELIB_PATH=$(PATH_TO_CPP)/qtimelib/$(QTIMELIB_LIB)
+
+SOUNDLIB_NAME=soundlib_static
+SOUNDLIB_L=-Lsoundlib -l$(SOUNDLIB_NAME)
+SOUNDLIB_LIB=lib$(SOUNDLIB_NAME).$(AFILE)
+SOUNDLIB_PATH=$(PATH_TO_CPP)/soundlib/$(SOUNDLIB_LIB)
+
+
+CPP_PATHS=$(GUILIB_PATH) $(DECODERLIB_PATH) $(ALIB_PATH)  $(SOUNDLIB_PATH) $(NETLIB_PATH)
+CPP_LS=$(GUILIB_L) $(DECODERLIB_L) $(ALIB_L) $(NETLIB_L) $(SOUNDLIB_L)
+
+
+####################################################################
+# The targets 
+####################################################################
+
+all:	$(LDNAME)
+	$(foreach DIR,$(DIRS),$(MAKE) -i -C $(DIR) all;)
+
+$(LDNAME):	$(OBJS)
+	$(AR_CMD) $(OBJS)
+	$(RANLIB_CMD) $(LDNAME) 
+
+
+clean:
+	rm -rf *.$(OFILE) *.$(AFILE) *.s *.bak *.log map.f build *Data *.pdb $(PROGRAMS) *.exe *.exe.so *68k *.SYM .DS_Store *.ilk .gdb_history .nautilus-metafile.xml resource.frk RESOURCE.FRK finder.dat FINDER.DAT ._* */._* */*/._* */*/*/._* *~ */*~ */*/*~ */*/*/*~ *.class *.javap *.java.* *.h.? tmp/*
+# Libraries...
+	$(foreach DIR,$(DIRS),$(MAKE) -i -C $(DIR) clean;)
+
+
+# The different Libraries and Programs...
+
+test_classfile: test_classfile.$(OFILE) libNJClassfile_static.a
+	$(CLXX) $(LDFLAGS) -o test_classfile test_classfile.$(OFILE) $(LDNAME) libNJClassfile_static.a $(LIBS) 
+
+
+fix: fix_perm fix_type
+# Libraries...
+	$(foreach DIR,$(DIRS),$(MAKE) -i -C $(DIR) fix;)
+
+
+install: all
+	cp *.a /usr/local/lib
+	mkdir /usr/local/include/$(LIBNAME)
+	cp *.h /usr/local/include/$(LIBNAME)
+	$(foreach DIR,$(DIRS),$(MAKE) -i -C $(DIR) install;)
+
+
+# dependencies
+# NOTE: its ok to see errors when running makedepend
+depend: remove_depends
+	makedepend $(DEPENDFLAGS) *.cpp
+# Libraries...
+	$(foreach DIR,$(DIRS),$(MAKE) -i -C $(DIR) depend;)
+
+
+remove_depends:
+	rm -f Makefile.dep
+	touch Makefile.dep
+# Libraries...
+	$(foreach DIR,$(DIRS),$(MAKE) -ik -C $(DIR) remove_depends;)
+
+
+include $(PATH_TO_BASE)/../Makefile.tail
+
+include Makefile.dep
+
+
+# DO NOT DELETE
+

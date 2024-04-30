@@ -1,0 +1,49 @@
+
+##########################################################
+##########################################################
+##
+## File "output.pl.part"
+##
+##########################################################
+##########################################################
+
+sub outputNewSymbol
+{
+  # As good a place as anywhere for this...
+  validIdentifier($symParent);
+  if($errorFlag eq 1) { return; }
+  validIdentifier($symType);
+  if($errorFlag eq 1) { return; }
+  validIdentifier($symName);
+  if($errorFlag eq 1) { return; }
+  validArgs($symArgs);
+  if($errorFlag eq 1) { return; }
+  # NOTE: We don't actually do anything with errorFlag yet!
+  #
+  print "\"$symParent\",\"$symWhat\",\"$symType\",\"$symName\",\"$symArgs\"\n";
+  #outputPrettySymbol();
+}
+
+
+sub outputPrettySymbol
+{
+  my $doSemicolon=1;
+  my $showParent=1;
+  my $showType=1;
+  if($symType eq "EXTERNAL") { print "extern "; $showParent=0; }
+  if($symWhat eq "CONST") { print "const "; }
+  if($symWhat eq "CLASS") { print "class "; $showType=0; }
+  if($showType eq 1) { print "$symType "; }
+  if($showParent eq 1) { print "$symParent\:\:"; }
+  if($symWhat eq "POINTER") { print "*"; }
+  print "$symName";
+  if($symWhat eq "ARRAY") { print "[$symArgs]"; }
+  if($symWhat eq "METHOD0") { print "($symArgs)"; }
+  if($symWhat eq "METHOD0V") { print "($symArgs)"; }
+  if($symWhat eq "METHODA") { print "($symArgs)"; }
+  if($symWhat eq "METHODAV") { print "($symArgs)"; }
+  if($symWhat eq "ARGUMENT") { print "($symArgs)"; }
+  if($doSemicolon eq 1) { print ";"; }
+  print "\n";
+}
+

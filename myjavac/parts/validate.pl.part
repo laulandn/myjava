@@ -1,0 +1,79 @@
+
+##########################################################
+##########################################################
+##
+## File "identifier.pl.part"
+##
+##########################################################
+##########################################################
+
+
+sub validIdentifier
+{
+  my $theName=shift;
+  my $ok=1;
+  $errorFlag=0;
+  #
+  # Basically look for stuff the parser didn't handle...
+  #if($theName =~ /\*/) { $ok=0; } # Actually could be a pointer...
+  if($theName =~ /\=/) { $ok=0; }
+  if($theName =~ /\(/) { $ok=0; }
+  if($theName =~ /\-/) { $ok=0; }
+  #
+  if($ok eq 0) {
+    #print "# ERROR: \"$theName\" does not look like a valid identifier!\n";
+    $errorFlag=1;
+  }
+}
+
+
+sub validIdentifierForErr
+{
+  my $theName=shift;
+  my $ok=1;
+  $errorFlag=0;
+  #
+  # Basically look for stuff the parser didn't handle...
+  #if($theName =~ /\*/) { $ok=0; } # Actually could be a pointer...
+  if($theName =~ /\=/) { $ok=0; }
+  if($theName =~ /\(/) { $ok=0; }
+  if($theName =~ /\-/) { $ok=0; }
+  #
+  if($ok eq 0) {
+    print "# ERROR: \"$theName\" does not look like a valid identifier!\n";
+    $errorFlag=1;
+  }
+}
+
+
+sub validArgs
+{
+  my $theName=shift;
+  my $ok=1;
+  $errorFlag=0;
+  #
+  # Basically look for stuff the parser didn't handle...
+  if($theName =~ /\;/) { $ok=0; }
+  #
+  if($ok eq 0) {
+    #print "# ERROR: \"$theName\" does not look like valid args!\n";
+    $errorFlag=1;
+  }
+}
+
+
+sub validArgsForErr
+{
+  my $theName=shift;
+  my $ok=1;
+  $errorFlag=0;
+  #
+  # Basically look for stuff the parser didn't handle...
+  if($theName =~ /\;/) { $ok=0; }
+  #
+  if($ok eq 0) {
+    print "# ERROR: \"$theName\" does not look like valid args!\n";
+    $errorFlag=1;
+  }
+}
+

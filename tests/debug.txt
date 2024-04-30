@@ -1,0 +1,5 @@
+
+__njsystemInternal::__njsystemInternal()
+__njstreamInternal::__njstreamInternal()
+__njstreamInternal::__njstreamInternal()
+__njstreamInternal::__njstreamInternal()

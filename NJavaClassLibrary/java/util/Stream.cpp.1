@@ -1,0 +1,31 @@
+
+#define DEBUG_OUT dBug
+#define CONS_OUT std::cout
+#define CONS_IN std::cin
+#define ERR_OUT std::cerr
+
+
+#ifdef DEBUG_VERBOSE
+
+
+class NJInternalStream;
+
+
+#include "Stream.h"
+
+
+
+Stream::Stream(NJString fn)
+{
+#ifdef DEBUG_VERBOSE
+DEBUG_OUT<<"Stream::Stream(\""<<fn<<"\")\n";
+name=fn;
+}
+
+
+NJString Stream::getName()
+{
+return name;
+}
+
+
