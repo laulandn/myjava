@@ -15,6 +15,7 @@ Very dumb. Very crazy.  Only works on very simple examples, if at all!
 myjavac:
 + Insane Java source to C++ translator/compiler.
 + Includes code to read and create simple symbol tables from Java and C++.
++ Includes script to recreate empty C++ or Java source skeleton from symbol table.
 + Barely works, if at all.
 + Gets tripped up by code formatting/style/spacing all the time. 
 + Symbol table format is plain text and minimal.
