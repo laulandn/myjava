@@ -10,7 +10,7 @@ Very dumb. Very crazy.  Only works on very simple examples, if at all!
 + njavac.sh: Compile Java to native binary.
 + njtrans.sh: Translate Java to C++
 + syms_cppfile.sh: Create symbol table from C++ source.
-çsyms_javafile.sh: Create symbol table frm Java source.
++ syms_javafile.sh: Create symbol table frm Java source.
 
 myjavac:
 + Insane Java source to C++ translator/compiler.
